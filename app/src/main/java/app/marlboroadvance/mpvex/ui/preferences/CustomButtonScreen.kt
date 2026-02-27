@@ -1,53 +1,96 @@
 package app.marlboroadvance.mpvex.ui.preferences
 
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.RemoveCircle
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import app.marlboroadvance.mpvex.preferences.PlayerPreferences
 import app.marlboroadvance.mpvex.presentation.Screen
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import app.marlboroadvance.mpvex.ui.utils.LocalBackStack
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.koin.compose.koinInject
-import java.util.UUID
 import sh.calvin.reorderable.ReorderableItem
-import sh.calvin.reorderable.rememberReorderableLazyGridState
+import sh.calvin.reorderable.rememberReorderableLazyListState
+import java.util.UUID
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Data models
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Serializable
 data class CustomButton(
@@ -56,545 +99,668 @@ data class CustomButton(
     val content: String,
     val longPressContent: String = "",
     val onStartup: String = "",
-    val isLeft: Boolean = true,
-    val isActive: Boolean = false
+    val enabled: Boolean = true,
 )
 
-private const val HEADER_LEFT_KEY = "header_left"
-private const val HEADER_RIGHT_KEY = "header_right"
-private const val EMPTY_SLOT_LEFT_KEY = "empty_slot_left"
-private const val EMPTY_SLOT_RIGHT_KEY = "empty_slot_right"
-private const val APPEND_SLOT_LEFT_KEY = "append_slot_left"
-private const val APPEND_SLOT_RIGHT_KEY = "append_slot_right"
+@Serializable
+data class CustomButtonSlots(
+    val slots: List<CustomButton?> = List(8) { null }
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Screen
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Serializable
 object CustomButtonScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val backstack = LocalBackStack.current
         val preferences = koinInject<PlayerPreferences>()
 
-        var buttons by remember { mutableStateOf(emptyList<CustomButton>()) }
-        var showDialog by remember { mutableStateOf(false) }
-        var buttonToEdit by remember { mutableStateOf<CustomButton?>(null) }
+        // 8 slots — order = left 0-3, right 4-7
+        val buttonSlots = remember { mutableStateListOf<CustomButton?>(*Array(8) { null }) }
 
-        // Ensure atomic updates
-        val buttonsState = rememberUpdatedState(buttons)
-
-        // Load initial
+        // Load saved data
         LaunchedEffect(Unit) {
             val jsonString = preferences.customButtons.get()
             if (jsonString.isNotBlank()) {
-                try {
-                    buttons = Json.decodeFromString(jsonString)
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                runCatching {
+                    val loaded = Json.decodeFromString<CustomButtonSlots>(jsonString)
+                    val slots = loaded.slots.take(8).toMutableList()
+                    while (slots.size < 8) slots.add(null)
+                    buttonSlots.clear()
+                    buttonSlots.addAll(slots)
+                }.onFailure {
+                    runCatching {
+                        val old: List<CustomButton> = Json.decodeFromString(jsonString)
+                        val slots = MutableList<CustomButton?>(8) { null }
+                        old.forEachIndexed { i, b -> if (i < 8) slots[i] = b }
+                        buttonSlots.clear()
+                        buttonSlots.addAll(slots)
+                    }
                 }
             }
         }
 
-        // Persistence Effect
-        LaunchedEffect(buttons) {
-            // always persist full list (even empty is fine)
-            preferences.customButtons.set(Json.encodeToString(buttons))
+        // Persist on every change
+        LaunchedEffect(buttonSlots.toList()) {
+            preferences.customButtons.set(Json.encodeToString(CustomButtonSlots(buttonSlots.toList())))
         }
 
-        fun updateButtons(newButtons: List<CustomButton>) {
-            buttons = newButtons
+        // Reorderable list state 
+        val lazyListState = rememberLazyListState()
+        val NON_SLOT_ITEMS_BEFORE = 1  // the Spacer item()
+        val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
+            val fromIdx = (from.index - NON_SLOT_ITEMS_BEFORE).coerceIn(0, buttonSlots.lastIndex)
+            val toIdx   = (to.index   - NON_SLOT_ITEMS_BEFORE).coerceIn(0, buttonSlots.lastIndex)
+            val moved = buttonSlots.removeAt(fromIdx)
+            buttonSlots.add(toIdx.coerceIn(0, buttonSlots.size), moved)
         }
 
         Scaffold(
             topBar = {
                 TopAppBar(
                     title = {
-                        Text(
-                            text = "Edit custom buttons",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                        Column {
+                            Text(
+                                text = "Custom Buttons",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                text = "Drag to reorder • Tap any slot to expand & edit",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     },
                     navigationIcon = {
                         IconButton(onClick = backstack::removeLastOrNull) {
                             Icon(
                                 Icons.AutoMirrored.Outlined.ArrowBack,
-                                contentDescription = null,
+                                contentDescription = "Back",
                                 tint = MaterialTheme.colorScheme.secondary,
                             )
                         }
                     },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
                 )
             },
-            floatingActionButton = {
-                FloatingActionButton(
-                    onClick = {
-                        buttonToEdit = null
-                        showDialog = true
-                    },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add New Button")
-                }
-            }
         ) { padding ->
-            val gridState = rememberLazyGridState()
-
-            // Reordering Logic (robust version)
-            val reorderableState = rememberReorderableLazyGridState(gridState) { from, to ->
-                val fromKey = from.key as? String ?: return@rememberReorderableLazyGridState
-                val toKey = to.key as? String ?: return@rememberReorderableLazyGridState
-
-                // Build explicit lists for easier logic
-                val left = buttonsState.value.filter { it.isActive && it.isLeft }.toMutableList()
-                val right = buttonsState.value.filter { it.isActive && !it.isLeft }.toMutableList()
-                val inactive = buttonsState.value.filter { !it.isActive }.toMutableList()
-
-                // find moving item from either side
-                val moving = (left + right).find { it.id == fromKey } ?: return@rememberReorderableLazyGridState
-
-                // remove from its source list
-                if (moving.isLeft) left.removeAll { it.id == moving.id } else right.removeAll { it.id == moving.id }
-
-                // helper to write back combined list
-                fun commit(newLeft: List<CustomButton>, newRight: List<CustomButton>) {
-                    // preserve inactive ordering
-                    updateButtons(newLeft + newRight + inactive)
-                }
-
-                // Determine destination
-                when (toKey) {
-                    HEADER_LEFT_KEY, EMPTY_SLOT_LEFT_KEY -> {
-                        if (left.size >= 4) return@rememberReorderableLazyGridState
-                        val moved = moving.copy(isLeft = true)
-                        left.add(0, moved)
-                        commit(left, right)
-                    }
-                    HEADER_RIGHT_KEY, EMPTY_SLOT_RIGHT_KEY -> {
-                        if (right.size >= 4) return@rememberReorderableLazyGridState
-                        val moved = moving.copy(isLeft = false)
-                        right.add(0, moved)
-                        commit(left, right)
-                    }
-                    APPEND_SLOT_LEFT_KEY -> {
-                         if (left.size >= 4) return@rememberReorderableLazyGridState
-                         val moved = moving.copy(isLeft = true)
-                         left.add(moved) // Append
-                         commit(left, right)
-                    }
-                    APPEND_SLOT_RIGHT_KEY -> {
-                         if (right.size >= 4) return@rememberReorderableLazyGridState
-                         val moved = moving.copy(isLeft = false)
-                         right.add(moved) // Append
-                         commit(left, right)
-                    }
-                    else -> {
-                        // dropped on another button
-                        val target = (left + right).find { it.id == toKey }
-                        if (target == null) return@rememberReorderableLazyGridState
-
-                        val targetIsLeft = target.isLeft
-                        val targetList = if (targetIsLeft) left else right
-                        
-                        // Check original relative positions to determine insertion side
-                        val originalList = if (targetIsLeft) buttonsState.value.filter { it.isActive && it.isLeft } else buttonsState.value.filter { it.isActive && !it.isLeft }
-                        val originalMovingIdx = originalList.indexOfFirst { it.id == moving.id }
-                        val originalTargetIdx = originalList.indexOfFirst { it.id == target.id }
-
-                        if (moving.isLeft != targetIsLeft) {
-                             if (targetList.size >= 4) return@rememberReorderableLazyGridState
-                             val moved = moving.copy(isLeft = targetIsLeft)
-                             val idx = targetList.indexOfFirst { it.id == target.id }
-                             if (idx != -1) targetList.add(idx, moved) else targetList.add(moved)
-                             commit(left, right)
-                        } else {
-                            // Same list reordering
-                            val moved = moving.copy(isLeft = targetIsLeft)
-                            val currentTargetIdx = targetList.indexOfFirst { it.id == target.id }
-                            
-                            if (currentTargetIdx != -1) {
-                                // If original moving < original target (Moving Right/Down), insert AFTER target
-                                if (originalMovingIdx != -1 && originalMovingIdx < originalTargetIdx) {
-                                     targetList.add(currentTargetIdx + 1, moved)
-                                } else {
-                                     // Moving Left/Up, insert BEFORE target
-                                     targetList.add(currentTargetIdx, moved)
-                                }
-                                commit(left, right)
-                            }
-                        }
-                    }
-                }
-            }
-
-            LazyVerticalGrid(
-                state = gridState,
-                columns = GridCells.Adaptive(minSize = 72.dp),
-                contentPadding = PaddingValues(4.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            LazyColumn(
+                state = lazyListState,
+                contentPadding = padding,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                val activeButtons = buttons.filter { it.isActive }
-                val availableButtons = buttons.filter { !it.isActive }
+                // Section divider items
+                item { Spacer(Modifier.height(8.dp)) }
 
-                // 1. Preview
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Column {
-                        Text(
-                            text = "Preview",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(bottom = 8.dp)
+                // itemsIndexed gives us the real slot position so empty-slot keys are unique
+                itemsIndexed(
+                    items = buttonSlots.toList(),
+                    key = { index, item -> item?.id ?: "slot_$index" },
+                ) { index, button ->
+                    val side = if (index < 4) "L${index + 1}" else "R${index - 3}"
+
+                    ReorderableItem(reorderState, key = button?.id ?: "slot_$index") { isDragging ->
+                        val elevation by animateFloatAsState(
+                            targetValue = if (isDragging) 8f else 0f,
+                            animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                            label = "elevation"
                         )
-                        LivePreviewBox(activeButtons = activeButtons)
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-                    }
-                }
 
-                // 2. Left Buttons Header
-                item(span = { GridItemSpan(maxLineSpan) }, key = HEADER_LEFT_KEY) {
-                    ReorderableItem(reorderableState, key = HEADER_LEFT_KEY, enabled = true) { _ ->
-                        val count = activeButtons.filter { it.isLeft }.size
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Active - Left Buttons", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                            Text("$count / 4", style = MaterialTheme.typography.labelSmall, color = if (count >= 4) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline)
-                        }
-                    }
-                }
-
-                // 3. Left Buttons
-                val leftButtons = activeButtons.filter { it.isLeft }
-                if (leftButtons.isEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }, key = EMPTY_SLOT_LEFT_KEY) {
-                        ReorderableItem(reorderableState, key = EMPTY_SLOT_LEFT_KEY, enabled = true) { _ ->
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                                    .padding(vertical = 2.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("Drop Left", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                            }
-                        }
-                    }
-                } else {
-                    items(leftButtons, key = { it.id }) { button ->
-                        ReorderableItem(reorderableState, key = button.id) { isDragging ->
-                            val elevation = animateDpAsState(if (isDragging) 8.dp else 0.dp)
-                            Box(
-                                modifier = Modifier
-                                    .shadow(elevation.value)
-                                    .draggableHandle()
-                            ) {
-                                CustomButtonChip(button = button, onRemove = { updateButtons(buttons.map { if (it.id == button.id) it.copy(isActive = false) else it }) })
-                            }
-                        }
-                    }
-                    // Append Slot (Visible if 1-3 items)
-                    if (leftButtons.isNotEmpty() && leftButtons.size < 4) {
-                         item(span = { GridItemSpan(1) }, key = APPEND_SLOT_LEFT_KEY) {
-                            ReorderableItem(reorderableState, key = APPEND_SLOT_LEFT_KEY, enabled = true) { _ ->
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(32.dp)
-                                        .background(Color.Transparent),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    // No Icon, just invisible drop target
-                                }
-                            }
-                         }
-                    }
-                }
-
-                // 4. Right Buttons Header
-                item(span = { GridItemSpan(maxLineSpan) }, key = HEADER_RIGHT_KEY) {
-                    ReorderableItem(reorderableState, key = HEADER_RIGHT_KEY, enabled = true) { _ ->
-                        val count = activeButtons.filter { !it.isLeft }.size
-                        Column {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Active - Right Buttons", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                                Text("$count / 4", style = MaterialTheme.typography.labelSmall, color = if (count >= 4) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline)
-                            }
-                        }
-                    }
-                }
-
-                // 5. Right Buttons
-                val rightButtons = activeButtons.filter { !it.isLeft }
-                if (rightButtons.isEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }, key = EMPTY_SLOT_RIGHT_KEY) {
-                        ReorderableItem(reorderableState, key = EMPTY_SLOT_RIGHT_KEY, enabled = true) { _ ->
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                                    .padding(vertical = 2.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("Drop Right", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                            }
-                        }
-                    }
-                } else {
-                    items(rightButtons, key = { it.id }) { button ->
-                        ReorderableItem(reorderableState, key = button.id) { isDragging ->
-                            val elevation = animateDpAsState(if (isDragging) 8.dp else 0.dp)
-                            Box(
-                                modifier = Modifier
-                                    .shadow(elevation.value)
-                                    .draggableHandle()
-                            ) {
-                                CustomButtonChip(button = button, onRemove = { updateButtons(buttons.map { if (it.id == button.id) it.copy(isActive = false) else it }) })
-                            }
-                        }
-                    }
-                    
-                    // Append Slot
-                    if (rightButtons.isNotEmpty() && rightButtons.size < 4) {
-                         item(span = { GridItemSpan(1) }, key = APPEND_SLOT_RIGHT_KEY) {
-                            ReorderableItem(reorderableState, key = APPEND_SLOT_RIGHT_KEY, enabled = true) { _ ->
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(32.dp)
-                                        .background(Color.Transparent),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    // No Icon
-                                }
-                            }
-                         }
-                    }
-                }
-
-                // 6. Available Header
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Column {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-                        Text(
-                            text = "Available Buttons",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
-                }
-
-                // 7. Available Items
-                if (availableButtons.isEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                            Text(text = "No available buttons. Create one!", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.outline)
-                        }
-                    }
-                } else {
-                    items(availableButtons, key = { it.id }, span = { GridItemSpan(maxLineSpan) }) { button ->
-                        CustomButtonItem(
+                        ButtonSlotCard(
+                            slotLabel = side,
                             button = button,
-                            isActive = false,
-                            onEdit = { buttonToEdit = button; showDialog = true },
-                            onDelete = { updateButtons(buttons.filter { it.id != button.id }) },
-                            onToggleActive = {
-                                // toggle into correct side respecting limits
-                                val leftCount = buttons.count { it.isActive && it.isLeft }
-                                val rightCount = buttons.count { it.isActive && !it.isLeft }
-                                if (button.isLeft) {
-                                    if (leftCount < 4) updateButtons(buttons.map { if (it.id == button.id) it.copy(isActive = true) else it })
-                                } else {
-                                    if (rightCount < 4) updateButtons(buttons.map { if (it.id == button.id) it.copy(isActive = true) else it })
-                                }
-                            }
+                            isDragging = isDragging,
+                            elevation = elevation,
+                            dragHandle = { interceptModifier ->
+                                Icon(
+                                    Icons.Default.DragHandle,
+                                    contentDescription = "Drag to reorder",
+                                    modifier = interceptModifier
+                                        .draggableHandle()
+                                        .padding(horizontal = 8.dp, vertical = 12.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                )
+                            },
+                            onSave = { updated ->
+                                buttonSlots[index] = updated
+                            },
+                            onDelete = {
+                                buttonSlots[index] = null
+                            },
                         )
                     }
                 }
 
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Spacer(modifier = Modifier.height(80.dp))
+                item { Spacer(Modifier.height(16.dp)) }
+            }
+        }
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slot card — always expandable; top bar is clean, all editing happens inline
+// ─────────────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ButtonSlotCard(
+    slotLabel: String,
+    button: CustomButton?,
+    isDragging: Boolean,
+    elevation: Float,
+    dragHandle: @Composable (Modifier) -> Unit,
+    onSave: (CustomButton) -> Unit,
+    onDelete: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val buttonId  = button?.id ?: remember { java.util.UUID.randomUUID().toString() }
+    var draftTitle     by remember(button?.id) { mutableStateOf(button?.title ?: "") }
+    var draftContent   by remember(button?.id) { mutableStateOf(button?.content ?: "") }
+    var draftLongPress by remember(button?.id) { mutableStateOf(button?.longPressContent ?: "") }
+    var draftStartup   by remember(button?.id) { mutableStateOf(button?.onStartup ?: "") }
+    var draftEnabled   by remember(button?.id) { mutableStateOf(button?.enabled ?: true) }
+
+    var activeLuaField by remember { mutableStateOf<String?>(null) }
+
+    val isPopulated = button != null
+    val sideColor   = if (slotLabel.startsWith("L")) MaterialTheme.colorScheme.primary
+                      else MaterialTheme.colorScheme.tertiary
+
+    val cardColor by animateColorAsState(
+        targetValue = when {
+            isDragging  -> MaterialTheme.colorScheme.primaryContainer
+            expanded    -> MaterialTheme.colorScheme.surfaceContainerHigh
+            isPopulated -> MaterialTheme.colorScheme.surfaceContainer
+            else        -> MaterialTheme.colorScheme.surfaceContainerLowest
+        },
+        label = "cardColor",
+    )
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(elevation = elevation.dp, shape = RoundedCornerShape(16.dp)),
+        shape  = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        onClick = { expanded = !expanded },
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+
+            // ── Header row ────────────────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Intercept touches on the drag handle to close the dropdown immediately
+                dragHandle(
+                    Modifier.pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitFirstDown(requireUnconsumed = false)
+                                expanded = false
+                            }
+                        }
+                    }
+                )
+
+                // Slot badge
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(sideColor.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = slotLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = sideColor,
+                    )
+                }
+
+                Spacer(Modifier.width(12.dp))
+
+                // Title or empty hint
+                Column(Modifier.weight(1f)) {
+                    val titleAlpha = if (isPopulated && !draftEnabled) 0.4f else 1f
+                    Text(
+                        text = draftTitle.ifBlank { if (isPopulated) button!!.title else "Empty slot" },
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = if (isPopulated) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (isPopulated)
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = titleAlpha)
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    )
+                    // Code preview — first line of tap action
+                    val preview = draftContent.ifBlank { button?.content ?: "" }
+                    if (preview.isNotBlank()) {
+                        Text(
+                            text = preview.lines().first().take(60),
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = FontFamily.Monospace, fontSize = 11.sp,
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                            maxLines = 1,
+                        )
+                    }
+                }
+
+                // Delete (only if a saved button exists)
+                if (isPopulated) {
+                    FilledTonalIconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(36.dp),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor   = MaterialTheme.colorScheme.onErrorContainer,
+                        ),
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(Modifier.width(4.dp))
+                }
+
+                // Expand chevron — always present
+                Icon(
+                    Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    modifier = Modifier
+                        .size(24.dp)
+                        .rotate(if (expanded) 180f else 0f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            // ── Expandable body ───────────────────────────────────────────────
+            AnimatedVisibility(
+                visible = expanded,
+                enter   = expandVertically(spring(stiffness = Spring.StiffnessMedium)) + fadeIn(),
+                exit    = shrinkVertically(spring(stiffness = Spring.StiffnessMedium)) + fadeOut(),
+            ) {
+                ButtonExpandedContent(
+                    slotLabel      = slotLabel,
+                    buttonId       = buttonId,
+                    isPopulated    = isPopulated,
+                    draftTitle     = draftTitle,
+                    draftContent   = draftContent,
+                    draftLongPress = draftLongPress,
+                    draftStartup   = draftStartup,
+                    draftEnabled   = draftEnabled,
+                    onTitleChange   = { draftTitle   = it },
+                    onEnabledChange = { draftEnabled = it },
+                    onSave = {
+                        // Build and save the button
+                        onSave(
+                            CustomButton(
+                                id               = buttonId,
+                                title            = draftTitle,
+                                content          = draftContent,
+                                longPressContent = draftLongPress,
+                                onStartup        = draftStartup,
+                                enabled          = draftEnabled,
+                            )
+                        )
+                        expanded = false
+                    },
+                    onCollapse      = { expanded = false },
+                    onOpenLuaEditor = { field -> activeLuaField = field },
+                )
+            }
+        }
+    }
+    
+    if (activeLuaField != null) {
+        val fieldKey = activeLuaField!!
+        val fieldLabel = when (fieldKey) {
+            "content"   -> "Tap action  ·  $slotLabel"
+            "longPress" -> "Long press  ·  $slotLabel"
+            "startup"   -> "On startup  ·  $slotLabel"
+            else        -> fieldKey
+        }
+        val fieldValue = when (fieldKey) {
+            "content"   -> draftContent
+            "longPress" -> draftLongPress
+            "startup"   -> draftStartup
+            else        -> ""
+        }
+
+        fun dismissAndSave() {
+            // Save all drafts (including the field that was just edited) back to preferences
+            if (draftTitle.isNotBlank()) {
+                onSave(
+                    CustomButton(
+                        id               = buttonId,
+                        title            = draftTitle,
+                        content          = draftContent,
+                        longPressContent = draftLongPress,
+                        onStartup        = draftStartup,
+                        enabled          = draftEnabled,
+                    )
+                )
+            }
+            activeLuaField = null
+        }
+
+        Dialog(
+            onDismissRequest = { dismissAndSave() },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress      = true,
+                dismissOnClickOutside   = false,
+            ),
+        ) {
+            Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Column(Modifier.fillMaxSize()) {
+                    TopAppBar(
+                        title = {
+                            Text(
+                                text       = fieldLabel,
+                                style      = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color      = MaterialTheme.colorScheme.primary,
+                            )
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = { dismissAndSave() }) {
+                                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back")
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = { dismissAndSave() }) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = "Done",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        },
+                    )
+                    val dialogScrollState = rememberScrollState()
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .imePadding()
+                    ) {
+                        BasicTextField(
+                            value         = fieldValue,
+                            onValueChange = { newCode ->
+                                when (fieldKey) {
+                                    "content"   -> draftContent   = newCode
+                                    "longPress" -> draftLongPress = newCode
+                                    "startup"   -> draftStartup   = newCode
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(dialogScrollState)
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            textStyle = TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        )
+                    }
                 }
             }
         }
+    }
+}
 
-        if (showDialog) {
-            CustomButtonDialog(
-                button = buttonToEdit,
-                onDismiss = { showDialog = false },
-                onSave = { newButton ->
-                    if (buttonToEdit == null) updateButtons(buttons + newButton)
-                    else updateButtons(buttons.map { if (it.id == newButton.id) newButton else it })
-                    showDialog = false
-                }
+// ─────────────────────────────────────────────────────────────────────────────
+// Accordion body — works for empty AND populated slots
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun ButtonExpandedContent(
+    slotLabel: String,
+    buttonId: String,
+    isPopulated: Boolean,
+    draftTitle: String,
+    draftContent: String,
+    draftLongPress: String,
+    draftStartup: String,
+    draftEnabled: Boolean,
+    onTitleChange: (String) -> Unit,
+    onEnabledChange: (Boolean) -> Unit,
+    onSave: () -> Unit,
+    onCollapse: () -> Unit,
+    onOpenLuaEditor: (String) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        HorizontalDividerWithLabel("Button")
+
+        // Title
+        OutlinedTextField(
+            value         = draftTitle,
+            onValueChange = onTitleChange,
+            label         = { Text("Button title *") },
+            modifier      = Modifier.fillMaxWidth(),
+            singleLine    = true,
+            shape         = RoundedCornerShape(12.dp),
+        )
+
+        HorizontalDividerWithLabel("Lua scripts")
+
+        // Tap action — required
+        LuaEditorEntryCard(
+            label      = "Tap action *",
+            code       = draftContent,
+            isRequired = true,
+            onClick    = { onOpenLuaEditor("content") },
+        )
+
+        // Long press
+        LuaEditorEntryCard(
+            label   = "Long press action",
+            code    = draftLongPress,
+            onClick = { onOpenLuaEditor("longPress") },
+        )
+
+        // On startup
+        LuaEditorEntryCard(
+            label   = "On startup",
+            code    = draftStartup,
+            onClick = { onOpenLuaEditor("startup") },
+        )
+
+        HorizontalDividerWithLabel("Settings")
+
+        // Enable / Disable row
+        Row(
+            modifier              = Modifier.fillMaxWidth(),
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text  = "Button enabled",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text  = if (draftEnabled) "Button is active in the player" else "Button is saved but hidden",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked         = draftEnabled,
+                onCheckedChange = onEnabledChange,
             )
         }
-    }
-}
 
-@Composable
-fun LivePreviewBox(activeButtons: List<CustomButton>) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 0.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Black),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth().height(220.dp).padding(16.dp)) {
-            val width = maxWidth
-            
-            Row(modifier = Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
-                 Icon(Icons.Default.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(32.dp))
-                 Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(48.dp))
-                 Icon(Icons.Default.SkipNext, null, tint = Color.White, modifier = Modifier.size(32.dp))
-            }
-            
-            Box(modifier = Modifier.fillMaxWidth().height(4.dp).align(Alignment.BottomCenter).background(Color.Red, RoundedCornerShape(2.dp)))
-
-            Row(
-                modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 48.dp).width(width / 2 - 24.dp).horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+        // Action row
+        Row(
+            horizontalArrangement = Arrangement.End,
+            modifier              = Modifier.fillMaxWidth(),
+        ) {
+            TextButton(onClick = onCollapse) { Text("Cancel") }
+            Spacer(Modifier.width(8.dp))
+            TextButton(
+                onClick = onSave,
+                enabled = draftTitle.isNotBlank(),
             ) {
-                activeButtons.filter { it.isLeft }.forEach { VisualButton(it) }
-            }
-
-            // Right Buttons - Aligned from End
-            val rightButtons = activeButtons.filter { !it.isLeft }
-            Row(
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 48.dp).width(width / 2 - 24.dp).horizontalScroll(rememberScrollState(), reverseScrolling = true),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), 
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                rightButtons.forEach { VisualButton(it) }
+                Text(if (isPopulated) "Save" else "Add button")
             }
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun VisualButton(button: CustomButton) {
-    Surface(
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+fun HorizontalDividerWithLabel(label: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
     ) {
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
         Text(
-            text = button.title,
+            text = " $label ",
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            softWrap = false,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp).basicMarquee()
+            color = MaterialTheme.colorScheme.outline,
+        )
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.outlineVariant,
         )
     }
 }
 
-@Composable
-fun CustomButtonChip(
-    button: CustomButton,
-    onRemove: () -> Unit
-) {
-    Surface(
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 8.dp, end = 2.dp, top = 4.dp, bottom = 4.dp)
-        ) {
-            Text(
-                text = button.title,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                maxLines = 1,
-                softWrap = false,
-                modifier = Modifier.basicMarquee()
-            )
-            IconButton(onClick = onRemove, modifier = Modifier.size(20.dp).padding(2.dp)) {
-                Icon(Icons.Default.RemoveCircle, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
-            }
-        }
-    }
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Lua code entry card — tappable, shows preview
+// ─────────────────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CustomButtonItem(
-    button: CustomButton,
-    isActive: Boolean,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    onToggleActive: () -> Unit
+fun LuaEditorEntryCard(
+    label: String,
+    code: String,
+    isRequired: Boolean = false,
+    onClick: () -> Unit,
 ) {
+    val hasCode = code.isNotBlank()
+    val borderColor = when {
+        isRequired && !hasCode -> MaterialTheme.colorScheme.error
+        hasCode -> MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+        else -> MaterialTheme.colorScheme.outlineVariant
+    }
+
     Card(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (hasCode)
+                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+            else
+                MaterialTheme.colorScheme.surfaceContainerLowest,
+        ),
+        border = BorderStroke(1.5.dp, borderColor),
     ) {
         Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.Top,
         ) {
-            Text(text = button.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            Row {
-                 IconButton(onClick = onToggleActive) {
-                    Icon(if (isActive) Icons.Default.RemoveCircle else Icons.Default.AddCircle, null, tint = if (isActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
-                }
-                IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, null) }
-                IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, null) }
+            // Code icon
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        if (hasCode) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        else MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Default.Code,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = if (hasCode) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.outline,
+                )
             }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isRequired && !hasCode) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurface,
+                    )
+                    if (hasCode) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "${code.lines().size} lines",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                if (hasCode) {
+                    Text(
+                        text = code.lines().take(3).joinToString("\n"),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                    )
+                } else {
+                    Text(
+                        text = "Tap to write Lua code…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    )
+                }
+            }
+
+            // Arrow
+            Icon(
+                Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                modifier = Modifier.rotate(-90f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            )
         }
     }
-}
-
-@Composable
-fun CustomButtonDialog(
-    button: CustomButton?,
-    onDismiss: () -> Unit,
-    onSave: (CustomButton) -> Unit
-) {
-    var title by remember { mutableStateOf(button?.title ?: "") }
-    var content by remember { mutableStateOf(button?.content ?: "") }
-    var longPressContent by remember { mutableStateOf(button?.longPressContent ?: "") }
-    var onStartup by remember { mutableStateOf(button?.onStartup ?: "") }
-    var isLeft by remember { mutableStateOf(button?.isLeft ?: true) }
-    
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (button != null) "Edit button" else "Add button") },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title *") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                OutlinedTextField(value = content, onValueChange = { content = it }, label = { Text("Lua code *") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
-                OutlinedTextField(value = longPressContent, onValueChange = { longPressContent = it }, label = { Text("Long press Lua") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = onStartup, onValueChange = { onStartup = it }, label = { Text("On startup") }, modifier = Modifier.fillMaxWidth())
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Alignment:")
-                    FilterChip(selected = isLeft, onClick = { isLeft = true }, label = { Text("Left") })
-                    FilterChip(selected = !isLeft, onClick = { isLeft = false }, label = { Text("Right") })
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(CustomButton(id = button?.id ?: UUID.randomUUID().toString(), title = title, content = content, longPressContent = longPressContent, onStartup = onStartup, isLeft = isLeft, isActive = button?.isActive ?: false)) }, enabled = title.isNotBlank() && content.isNotBlank()) { Text("Save") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
 }

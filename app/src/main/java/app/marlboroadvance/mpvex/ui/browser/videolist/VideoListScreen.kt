@@ -147,10 +147,11 @@ data class VideoListScreen(
     val videoSortOrder by browserPreferences.videoSortOrder.collectAsState()
     val sortedVideosWithInfo =
       remember(videosWithPlaybackInfo, videoSortType, videoSortOrder) {
+        val infoById = videosWithPlaybackInfo.associateBy { it.video.id }
         val sortedVideos = SortUtils.sortVideos(videosWithPlaybackInfo.map { it.video }, videoSortType, videoSortOrder)
-        // Maintain the playback info mapping
+        // Maintain the playback info mapping — O(1) lookup per item
         sortedVideos.map { video ->
-          videosWithPlaybackInfo.find { it.video.id == video.id } ?: VideoWithPlaybackInfo(video)
+          infoById[video.id] ?: VideoWithPlaybackInfo(video)
         }
       }
 
@@ -818,8 +819,8 @@ private fun VideoSortDialog(
         if (isLandscape) browserPreferences.folderGridColumnsLandscape.set(it)
         else browserPreferences.folderGridColumnsPortrait.set(it)
       },
-      valueRange = 2f..5f,
-      steps = 2,
+      valueRange = if (isLandscape) 3f..5f else 2f..4f,
+      steps = if (isLandscape) 1 else 1,
     )
   } else null
 
@@ -831,8 +832,8 @@ private fun VideoSortDialog(
         if (isLandscape) browserPreferences.videoGridColumnsLandscape.set(it)
         else browserPreferences.videoGridColumnsPortrait.set(it)
       },
-      valueRange = 1f..5f,
-      steps = 3,
+      valueRange = if (isLandscape) 3f..5f else 1f..3f,
+      steps = if (isLandscape) 1 else 1,
     )
   } else null
 
