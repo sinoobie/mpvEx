@@ -50,6 +50,7 @@ class PlayerPreferences(
   val playerTimeToDisappear = preferenceStore.getInt("player_time_to_disappear", 4000)
 
   val defaultVideoZoom = preferenceStore.getFloat("default_video_zoom", 0f)
+  val panAndZoomEnabled = preferenceStore.getBoolean("pan_and_zoom_enabled", false)
 
   val includeSubtitlesInSnapshot = preferenceStore.getBoolean("include_subtitles_in_snapshot", false)
 
@@ -58,13 +59,17 @@ class PlayerPreferences(
 
   val useWavySeekbar = preferenceStore.getBoolean("use_wavy_seekbar", true)
 
+  val customSkipDuration = preferenceStore.getInt("custom_skip_duration", 90)
+
   val repeatMode = preferenceStore.getEnum("repeat_mode", RepeatMode.OFF)
   val shuffleEnabled = preferenceStore.getBoolean("shuffle_enabled", false)
 
   // New: autoplay next video when current file ends
-  val autoplayNextVideo = preferenceStore.getBoolean("autoplay_next_video", false)
+  val autoplayNextVideo = preferenceStore.getBoolean("autoplay_next_video", true)
 
   val autoPiPOnNavigation = preferenceStore.getBoolean("auto_pip_on_navigation", false)
+
+  val keepScreenOnWhenPaused = preferenceStore.getBoolean("keep_screen_on_when_paused", false)
 
   // Custom Buttons - JSON List
   val customButtons = preferenceStore.getString("custom_buttons_json", "[]")

@@ -36,11 +36,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -107,6 +109,7 @@ import app.marlboroadvance.mpvex.ui.player.controls.components.ControlsButton
 import app.marlboroadvance.mpvex.ui.player.controls.components.MultipleSpeedPlayerUpdate
 import app.marlboroadvance.mpvex.ui.player.controls.components.SeekPlayerUpdate
 import app.marlboroadvance.mpvex.ui.player.controls.components.SeekbarWithTimers
+import app.marlboroadvance.mpvex.ui.player.controls.components.SlideToUnlock
 import app.marlboroadvance.mpvex.ui.player.controls.components.SpeedControlSlider
 import app.marlboroadvance.mpvex.ui.player.controls.components.TextPlayerUpdate
 import app.marlboroadvance.mpvex.ui.player.controls.components.VolumeSlider
@@ -166,6 +169,8 @@ fun PlayerControls(
   val paused by MPVLib.propBoolean["pause"].collectAsState()
   val duration by MPVLib.propInt["duration"].collectAsState()
   val position by MPVLib.propInt["time-pos"].collectAsState()
+  val precisePosition by viewModel.precisePosition.collectAsState()
+  val preciseDuration by viewModel.preciseDuration.collectAsState()
   val playbackSpeed by MPVLib.propFloat["speed"].collectAsState()
   val doubleTapSeekAmount by viewModel.doubleTapSeekAmount.collectAsState()
   val showDoubleTapOvals by playerPreferences.showDoubleTapOvals.collectAsState()
@@ -185,6 +190,9 @@ fun PlayerControls(
     val haptic = LocalHapticFeedback.current
 
     val customButtons by viewModel.customButtons.collectAsState()
+    
+  val abLoopA by viewModel.abLoopA.collectAsState()
+  val abLoopB by viewModel.abLoopB.collectAsState()
 
   val onOpenSheet: (Sheets) -> Unit = {
     viewModel.sheetShown.update { _ -> it }
@@ -228,14 +236,20 @@ fun PlayerControls(
     appearancePreferences.parseButtons(portraitBottomControlsPref, mutableSetOf())
   }
 
+  var isUnlockSliderDragging by remember { mutableStateOf(false) }
+
   LaunchedEffect(
     controlsShown,
     paused,
     isSeeking,
     resetControlsTimestamp,
+    areControlsLocked,
+    isUnlockSliderDragging,
   ) {
-    if (controlsShown && paused == false && !isSeeking) {
-      delay(playerTimeToDisappear.toLong())
+    if (controlsShown && paused == false && !isSeeking && !isUnlockSliderDragging) {
+      // Use 2.5 second delay when controls are locked, otherwise use user preference
+      val delayTime = if (areControlsLocked) 2500L else playerTimeToDisappear.toLong()
+      delay(delayTime)
       viewModel.hideControls()
     }
   }
@@ -353,12 +367,12 @@ fun PlayerControls(
           modifier =
             Modifier.constrainAs(brightnessSlider) {
               if (swapVolumeAndBrightness) {
-                start.linkTo(parent.start, if (isPortrait) spacing.medium else spacing.extraLarge)
+                start.linkTo(parent.start, if (isPortrait) spacing.large else spacing.extraLarge)
               } else {
-                end.linkTo(parent.end, if (isPortrait) spacing.medium else spacing.extraLarge)
+                end.linkTo(parent.end, if (isPortrait) spacing.large else spacing.extraLarge)
               }
               top.linkTo(parent.top, spacing.larger)
-              bottom.linkTo(parent.bottom, spacing.larger)
+              bottom.linkTo(parent.bottom, spacing.extraLarge)
             },
         ) { BrightnessSlider(brightness, 0f..1f) }
 
@@ -383,12 +397,12 @@ fun PlayerControls(
           modifier =
             Modifier.constrainAs(volumeSlider) {
               if (swapVolumeAndBrightness) {
-                end.linkTo(parent.end, if (isPortrait) spacing.medium else spacing.extraLarge)
+                end.linkTo(parent.end, if (isPortrait) spacing.large else spacing.extraLarge)
               } else {
-                start.linkTo(parent.start, if (isPortrait) spacing.medium else spacing.extraLarge)
+                start.linkTo(parent.start, if (isPortrait) spacing.large else spacing.extraLarge)
               }
               top.linkTo(parent.top, spacing.larger)
-              bottom.linkTo(parent.bottom, spacing.larger)
+              bottom.linkTo(parent.bottom, spacing.extraLarge)
             },
         ) {
           val boostCap by audioPreferences.volumeBoostCap.collectAsState()
@@ -470,6 +484,7 @@ fun PlayerControls(
             is PlayerUpdates.ShowText ->
               TextPlayerUpdate(
                 (currentPlayerUpdate as PlayerUpdates.ShowText).value,
+                modifier = Modifier.widthIn(min = 120.dp),
               )
 
             is PlayerUpdates.VideoZoom -> {
@@ -533,7 +548,7 @@ fun PlayerControls(
           }
         }
 
-        val areButtonsVisible = controlsShown && !areControlsLocked
+        val areButtonsVisible = controlsShown && !areControlsLocked && !areSlidersShown
 
         AnimatedVisibility(
             visible = areButtonsVisible && !isPortrait,
@@ -572,7 +587,7 @@ fun PlayerControls(
                                     viewModel.callCustomButton(button.id)
                                 },
                                 onLongClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     resetControlsTimestamp = System.currentTimeMillis()
                                     viewModel.callCustomButtonLongPress(button.id)
                                 }
@@ -629,7 +644,7 @@ fun PlayerControls(
                                     viewModel.callCustomButton(button.id)
                                 },
                                 onLongClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     resetControlsTimestamp = System.currentTimeMillis()
                                     viewModel.callCustomButtonLongPress(button.id)
                                 }
@@ -687,7 +702,7 @@ fun PlayerControls(
                                     viewModel.callCustomButton(button.id)
                                 },
                                 onLongClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     resetControlsTimestamp = System.currentTimeMillis()
                                     viewModel.callCustomButtonLongPress(button.id)
                                 }
@@ -713,23 +728,15 @@ fun PlayerControls(
           exit = fadeOut(),
           modifier =
             Modifier
-              .then(
-                if (showSystemStatusBar) {
-                  Modifier.windowInsetsPadding(WindowInsets.statusBars)
-                } else {
-                  Modifier
-                }
-              )
               .constrainAs(unlockControlsButton) {
-                // Significantly moves down the lock icon in portrait mode to avoid status bar overlap
-                top.linkTo(parent.top, if (isPortrait) 56.dp else spacing.medium)
-                start.linkTo(parent.start, spacing.medium)
+                bottom.linkTo(parent.bottom, spacing.extraLarge)
+                start.linkTo(parent.start)
+                end.linkTo(parent.end)
               },
         ) {
-          ControlsButton(
-            Icons.Filled.Lock,
-            onClick = { viewModel.unlockControls() },
-            color = if (hideBackground) controlColor else MaterialTheme.colorScheme.onSurface,
+          SlideToUnlock(
+            onUnlock = { viewModel.unlockControls() },
+            onDraggingChanged = { isDragging -> isUnlockSliderDragging = isDragging },
           )
         }
 
@@ -1007,18 +1014,18 @@ fun PlayerControls(
                 if (isPortrait) {
                   bottom.linkTo(playerPauseButton.top, spacing.small)
                 } else {
-                  bottom.linkTo(parent.bottom, spacing.large)
+                  bottom.linkTo(parent.bottom, spacing.small)
                 }
-                start.linkTo(parent.start, spacing.medium)
-                end.linkTo(parent.end, spacing.medium)
+                start.linkTo(parent.start, spacing.large)
+                end.linkTo(parent.end, spacing.large)
               },
         ) {
           val invertDuration by playerPreferences.invertDuration.collectAsState()
           val seekbarStyle by appearancePreferences.seekbarStyle.collectAsState()
 
           SeekbarWithTimers(
-            position = position?.toFloat() ?: 0f,
-            duration = duration?.toFloat() ?: 0f,
+            position = precisePosition,
+            duration = if (preciseDuration > 0) preciseDuration else duration?.toFloat() ?: 0f,
             onValueChange = {
               isSeeking = true
               resetControlsTimestamp = System.currentTimeMillis()
@@ -1038,6 +1045,8 @@ fun PlayerControls(
             chapters = chapters.toImmutableList(),
             paused = paused ?: false,
             seekbarStyle = seekbarStyle,
+            loopStart = abLoopA?.toFloat(),
+            loopEnd = abLoopB?.toFloat(),
           )
         }
 
@@ -1079,10 +1088,10 @@ fun PlayerControls(
               )
               .constrainAs(topLeftControls) {
                 top.linkTo(parent.top, if (isPortrait) spacing.extraLarge else spacing.small)
-                start.linkTo(parent.start, spacing.medium)
+                start.linkTo(parent.start, spacing.large)
                 if (isPortrait) {
                   width = Dimension.fillToConstraints
-                  end.linkTo(parent.end, spacing.medium)
+                  end.linkTo(parent.end, spacing.large)
                 } else {
                   width = Dimension.fillToConstraints
                   end.linkTo(topRightControls.start, spacing.extraSmall)
@@ -1146,7 +1155,7 @@ fun PlayerControls(
               )
               .constrainAs(topRightControls) {
                 top.linkTo(parent.top, spacing.small)
-                end.linkTo(parent.end, spacing.medium)
+                end.linkTo(parent.end, spacing.large)
               },
         ) {
           TopRightPlayerControlsLandscape(
@@ -1199,13 +1208,13 @@ fun PlayerControls(
               )
               .constrainAs(bottomRightControls) {
                 if (isPortrait) {
-                  bottom.linkTo(parent.bottom, spacing.large)
-                  start.linkTo(parent.start, spacing.medium)
-                  end.linkTo(parent.end, spacing.medium)
+                  bottom.linkTo(parent.bottom, spacing.extraLarge)
+                  start.linkTo(parent.start, spacing.large)
+                  end.linkTo(parent.end, spacing.large)
                   width = Dimension.fillToConstraints
                 } else {
                   bottom.linkTo(seekbar.top, spacing.small)
-                  end.linkTo(parent.end, spacing.medium)
+                  end.linkTo(parent.end, spacing.large)
                 }
               },
         ) {
@@ -1279,7 +1288,7 @@ fun PlayerControls(
               )
               .constrainAs(bottomLeftControls) {
                 bottom.linkTo(seekbar.top, spacing.small)
-                start.linkTo(parent.start, spacing.medium)
+                start.linkTo(parent.start, spacing.large)
                 width = Dimension.fillToConstraints
                 end.linkTo(bottomRightControls.start, spacing.small)
               },
